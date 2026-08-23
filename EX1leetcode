@@ -1,0 +1,75 @@
+easy1
+int findComplement(int num) {
+    unsigned int mask = ~0;
+    while (mask & num) {
+        mask <<= 1;
+    }
+    return ~mask & ~num;
+}   
+easy2
+int* countBits(int n, int* returnSize) {
+    int* result = malloc((n + 1) * sizeof(int));
+    *returnSize = n + 1;
+    result[0] = 0;
+    for (int i = 1; i <= n; i++) {
+        result[i] = result[i >> 1] + (i & 1);
+    }
+    return result;
+}
+medium 1
+typedef struct Trie {
+    struct Trie* children[2];
+} Trie;
+
+Trie* createNode() {
+    Trie* node = malloc(sizeof(Trie));
+    node->children[0] = NULL;
+    node->children[1] = NULL;
+    return node;
+}
+
+void insert(Trie* root, int num) {
+    Trie* node = root;
+    for (int i = 30; i >= 0; i--) {
+        int bit = (num >> i) & 1;
+        if (!node->children[bit]) {
+            node->children[bit] = createNode();
+        }
+        node = node->children[bit];
+    }
+}
+
+int searchMaxXor(Trie* root, int num) {
+    Trie* node = root;
+    int maxXor = 0;
+    for (int i = 30; i >= 0; i--) {
+        int bit = (num >> i) & 1;
+        int toggle = bit ^ 1;
+        if (node->children[toggle]) {
+            maxXor |= (1 << i);
+            node = node->children[toggle];
+        } else {
+            node = node->children[bit];
+        }
+    }
+    return maxXor;
+}
+
+int findMaximumXOR(int* nums, int numsSize) {
+    if (numsSize == 0) return 0;
+    
+    Trie* root = createNode();
+    for (int i = 0; i < numsSize; i++) {
+        insert(root, nums[i]);
+    }
+    
+    int maxResult = 0;
+    for (int i = 0; i < numsSize; i++) {
+        int currentXor = searchMaxXor(root, nums[i]);
+        if (currentXor > maxResult) {
+            maxResult = currentXor;
+        }
+    }
+    
+    return maxResult;
+}   
