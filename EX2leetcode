@@ -1,0 +1,154 @@
+easy1
+char* addBinary(char* a, char* b) {
+    int len_a = strlen(a);
+    int len_b = strlen(b);
+    int max_len = (len_a > len_b) ? len_a : len_b;
+    
+    char* result = malloc(max_len + 2);
+    result[max_len + 1] = '\0';
+    
+    int carry = 0;
+    int i = len_a - 1;
+    int j = len_b - 1;
+    int k = max_len;
+    
+    while (i >= 0 || j >= 0 || carry) {
+        int sum = carry;
+        if (i >= 0) sum += a[i--] - '0';
+        if (j >= 0) sum += b[j--] - '0';
+        
+        result[k--] = (sum % 2) + '0';
+        carry = sum / 2;
+    }
+    
+    if (k == 0) {
+        return result;
+    }
+    
+    return result + k + 1;
+}   
+medium 1
+#define HASH_SIZE 100003
+
+typedef struct HashNode {
+    int val;
+    struct HashNode* next;
+} HashNode;
+
+typedef struct {
+    HashNode* buckets[HASH_SIZE];
+    int size;
+} HashSet;
+
+HashSet* createSet() {
+    HashSet* set = calloc(1, sizeof(HashSet));
+    return set;
+}
+
+void freeSet(HashSet* set) {
+    for (int i = 0; i < HASH_SIZE; i++) {
+        HashNode* node = set->buckets[i];
+        while (node) {
+            HashNode* temp = node;
+            node = node->next;
+            free(temp);
+        }
+    }
+    free(set);
+}
+
+int hash(int val) {
+    return (val < 0 ? -val : val) % HASH_SIZE;
+}
+
+bool contains(HashSet* set, int val) {
+    int idx = hash(val);
+    HashNode* node = set->buckets[idx];
+    while (node) {
+        if (node->val == val) return true;
+        node = node->next;
+    }
+    return false;
+}
+
+void add(HashSet* set, int val) {
+    if (contains(set, val)) return;
+    int idx = hash(val);
+    HashNode* node = malloc(sizeof(HashNode));
+    node->val = val;
+    node->next = set->buckets[idx];
+    set->buckets[idx] = node;
+    set->size++;
+}
+
+void addAll(HashSet* dest, HashSet* src) {
+    for (int i = 0; i < HASH_SIZE; i++) {
+        HashNode* node = src->buckets[i];
+        while (node) {
+            add(dest, node->val);
+            node = node->next;
+        }
+    }
+}
+
+typedef struct {
+    int* data;
+    int size;
+    int capacity;
+} IntList;
+
+IntList* createList() {
+    IntList* list = malloc(sizeof(IntList));
+    list->capacity = 64;
+    list->size = 0;
+    list->data = malloc(list->capacity * sizeof(int));
+    return list;
+}
+
+void freeList(IntList* list) {
+    free(list->data);
+    free(list);
+}
+
+void listAdd(IntList* list, int val) {
+    if (list->size >= list->capacity) {
+        list->capacity *= 2;
+        list->data = realloc(list->data, list->capacity * sizeof(int));
+    }
+    list->data[list->size++] = val;
+}
+
+int subarrayBitwiseORs(int* arr, int arrSize) {
+    HashSet* allResults = createSet();
+    IntList* currentEnding = createList();
+    
+    for (int i = 0; i < arrSize; i++) {
+        IntList* nextEnding = createList();
+        
+        if (!contains(allResults, arr[i])) add(allResults, arr[i]);
+        listAdd(nextEnding, arr[i]);
+        
+        for (int j = 0; j < currentEnding->size; j++) {
+            int val = currentEnding->data[j] | arr[i];
+            if (!contains(allResults, val)) add(allResults, val);
+            
+            bool exists = false;
+            for (int k = 0; k < nextEnding->size; k++) {
+                if (nextEnding->data[k] == val) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) listAdd(nextEnding, val);
+        }
+        
+        freeList(currentEnding);
+        currentEnding = nextEnding;
+    }
+    
+    int result = allResults->size;
+    freeSet(allResults);
+    freeList(currentEnding);
+    
+    return result;
+}   
