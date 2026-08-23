@@ -1,0 +1,24 @@
+easy1
+int hammingDistance(int x, int y) {
+    int xor_result = x ^ y;
+    int distance = 0;
+    
+    while (xor_result) {
+        distance += xor_result & 1;
+        xor_result >>= 1;
+    }
+    
+    return distance;
+}   
+medium 1
+int totalHammingDistance(int* nums, int numsSize) {
+    int total = 0;
+    for (int i = 0; i < 32; i++) {
+        int ones = 0;
+        for (int j = 0; j < numsSize; j++) {
+            ones += (nums[j] >> i) & 1;
+        }
+        total += ones * (numsSize - ones);
+    }
+    return total;
+}   
