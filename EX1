@@ -1,0 +1,291 @@
+#ifndef HEAD_H
+#define HEAD_H
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+
+#define START_FLAG "01111110"
+#define ADDR "11111111"
+#define CTRL "00000000"
+#define FCS "00000000000000000000000000000000"
+#define END_FLAG "01111110"
+#define MAX_FRAMES 100
+#define DATA_SZ 16
+#define MAX 64
+#define ESC "01111101"
+#define FLAG "01111110"
+
+typedef struct Frame {
+    char sflag[9];
+    char addr[9];
+    char control[9];
+    char data[MAX+1];
+    char fcs[33];
+    char eflag[9];
+} f;
+
+void bitStuff(struct Frame frames[], int nframe);
+void byteStuff(struct Frame frames[], int nframe);
+void bitDestuff(char* framefile);
+void byteDestuff(char* framefile);
+int readFile(char *ipfile, struct Frame f[]);
+void writeFile(char* opfile);
+
+#endif
+
+#include "head.h"
+
+int readFile(char* ipfile, struct Frame f[]) {
+    FILE* fp = fopen(ipfile, "r");
+    if (fp == NULL) {
+        printf("file is empty\n");
+        return -1;
+    }
+    int count = 0;
+    int ch;
+    while ((ch = fgetc(fp)) != EOF) {
+        if (ch == '\n' || ch == '\r') continue;
+        count++;
+    }
+    fseek(fp, 0, SEEK_SET);
+
+    int nframe = count / DATA_SZ;
+    if (count % DATA_SZ != 0) {
+        nframe = nframe + 1;
+    }
+
+    int i;
+    for (i = 0; i < nframe; i++) {
+        strcpy(f[i].sflag, START_FLAG);
+        strcpy(f[i].addr, ADDR);
+        strcpy(f[i].control, CTRL);
+        int k = 0;
+        while (k < DATA_SZ && (ch = fgetc(fp)) != EOF) {
+            if (ch == '\n' || ch == '\r') continue;
+            f[i].data[k] = (char)ch;
+            k++;
+        }
+        f[i].data[k] = '\0';
+
+        strcpy(f[i].fcs, FCS);
+        strcpy(f[i].eflag, END_FLAG);
+    }
+    fclose(fp);
+    return nframe;
+}
+
+void bitStuff(struct Frame f[], int nframe) {
+    int i;
+    printf("Raw data:\n");
+    for (i = 0; i < nframe; i++) {
+        if (strlen(f[i].data) == 0) continue;
+
+        printf("%s\n", f[i].data);
+        char stuff[600];
+
+        strcpy(stuff, f[i].sflag);
+        strcat(stuff, f[i].addr);
+        strcat(stuff, f[i].control);
+        int header_offset = strlen(stuff);
+        strcat(stuff, f[i].data);
+
+        int j, datalen = strlen(stuff);
+        for (j = header_offset; stuff[j] != '\0'; j++) {
+            if (stuff[j] == '0') {
+                if (stuff[j+1] == '1' && stuff[j+2] == '1' && stuff[j+3] == '1' && stuff[j+4] == '1' && stuff[j+5] == '1') {
+                    int k;
+                    for (k = datalen; k > j + 5; k--) {
+                        stuff[k+1] = stuff[k];
+                    }
+                    stuff[j+6] = '0';
+                    datalen = datalen + 1;
+                    stuff[datalen] = '\0';
+                }
+            }
+        }
+        strcat(stuff, FCS);
+        strcat(stuff, END_FLAG);
+        strcpy(f[i].data, stuff);
+    }
+    printf("\n");
+
+    FILE* fp4 = fopen("bitstuff.txt", "w");
+    if (fp4 == NULL) {
+        printf("file not opened\n");
+        return;
+    }
+    printf("Bit stuffed frame:\n");
+    for (i = 0; i < nframe; i++) {
+        if (strlen(f[i].data) == 0 || strcmp(f[i].data, END_FLAG) == 0) continue;
+        fprintf(fp4, "%s\n", f[i].data);
+        printf("%s\n", f[i].data);
+    }
+    fclose(fp4);
+}
+
+void bitDestuff(char *framefile) {
+    FILE *fp5 = fopen(framefile, "r");
+    if (fp5 == NULL) {
+        printf("File not exist\n");
+        return;
+    }
+    char line[600];
+    printf("BitDestuffing\n");
+    while (fgets(line, sizeof(line), fp5) != NULL) {
+        line[strcspn(line, "\n")] = '\0';
+        int total_len = strlen(line);
+
+        int header_len = strlen(START_FLAG) + strlen(ADDR) + strlen(CTRL);
+        int dataend = total_len - strlen(FCS) - strlen(END_FLAG);
+        if (dataend <= header_len) continue;
+
+        int stuffed = 0;
+        int ones = 0;
+        int i;
+        for (i = header_len; i < dataend; i++) {
+            if (line[i] == '1') {
+                ones++;
+            } else {
+                if (ones == 5) {
+                    stuffed = 1;
+                    break;
+                }
+                ones = 0;
+            }
+        }
+
+        if (!stuffed) {
+            printf("Frame is bit stuffed.\n");
+            for (i = header_len; i < dataend; i++) {
+                putchar(line[i]);
+            }
+            printf("\n");
+            continue;
+        }
+
+        printf("Frame is bit stuffed.\n");
+        char out[600];
+        int l = 0;
+        ones = 0;
+        for (i = header_len; i < dataend; i++) {
+            if (line[i] == '1') {
+                out[l++] = '1';
+                ones++;
+            } else {
+                if (ones == 5) {
+                    ones = 0;
+                    continue;
+                }
+                out[l++] = '0';
+                ones = 0;
+            }
+        }
+        out[l] = '\0';
+        printf("%s\n", out);
+    }
+    fclose(fp5);
+}
+
+void byteStuff(struct Frame f[], int nframe) {
+    int i;
+    for (i = 0; i < nframe; i++) {
+        if (strlen(f[i].data) == 0) continue;
+
+        char stuff[600] = "";
+        strcat(stuff, f[i].sflag);
+        strcat(stuff, f[i].addr);
+        strcat(stuff, f[i].control);
+
+        char byte[9];
+        int len = strlen(f[i].data);
+        int j;
+        for (j = 0; j < len; j += 8) {
+            strncpy(byte, &f[i].data[j], 8);
+            byte[8] = '\0';
+
+            if (strcmp(byte, FLAG) == 0 || strcmp(byte, ESC) == 0) {
+                strcat(stuff, ESC);
+            }
+            strcat(stuff, byte);
+        }
+        strcat(stuff, FCS);
+        strcat(stuff, END_FLAG);
+        strcpy(f[i].data, stuff);
+    }
+
+    FILE* fp6 = fopen("bytestuff.txt", "w");
+    if (fp6 == NULL) {
+        printf("cannot open the file\n");
+        return;
+    }
+    printf("Byte stuffed frame:\n");
+    for (i = 0; i < nframe; i++) {
+        if (strlen(f[i].data) == 0 || strcmp(f[i].data, END_FLAG) == 0) continue;
+        fprintf(fp6, "%s\n", f[i].data);
+        printf("%s\n", f[i].data);
+    }
+    fclose(fp6);
+}
+
+void byteDestuff(char* framefile) {
+    FILE* fp7 = fopen(framefile, "r");
+    if (fp7 == NULL) {
+        printf("cannot open the file\n");
+        return;
+    }
+    char line[600];
+    printf("ByteDestuffing\n");
+    while (fgets(line, sizeof(line), fp7) != NULL) {
+        line[strcspn(line, "\n")] = '\0';
+        int total_len = strlen(line);
+
+        int header_len = strlen(START_FLAG) + strlen(ADDR) + strlen(CTRL);
+        int dataend = total_len - strlen(FCS) - strlen(END_FLAG);
+        if (dataend <= header_len) continue;
+        int i;
+
+        int stuffed = 0;
+        for (i = header_len; i < dataend; i += 8) {
+            char byte[9];
+            strncpy(byte, &line[i], 8);
+            byte[8] = '\0';
+            if (strcmp(byte, ESC) == 0) {
+                stuffed = 1;
+                break;
+            }
+        }
+
+        printf("Frame is byte stuffed.\n");
+        char destuff[600] = "";
+        i = header_len;
+        while (i < dataend) {
+            char byte[9];
+            strncpy(byte, &line[i], 8);
+            byte[8] = '\0';
+
+            if (strcmp(byte, ESC) == 0) {
+                i += 8;
+                strncpy(byte, &line[i], 8);
+                byte[8] = '\0';
+            }
+            strcat(destuff, byte);
+            i += 8;
+        }
+        printf("%s\n", destuff);
+    }
+    fclose(fp7);
+}
+
+#include "head.h"
+
+int main()
+{
+    struct Frame f[MAX_FRAMES];
+    int nframe = readFile("ef.txt", f);
+    bitStuff(f, nframe);
+    bitDestuff("bitstuff.txt");
+    nframe = readFile("ef.txt", f);
+    byteStuff(f,nframe);
+    byteDestuff("bytestuff.txt");
+    return 0;
+}
