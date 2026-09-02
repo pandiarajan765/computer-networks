@@ -1,0 +1,1189 @@
+parity
+#ifndef TWOHEAD_H
+#define TWOHEAD_H
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct Data
+{
+    char data[2000];
+    int datalength;
+};
+
+void twoparity_Sender(struct Data *f);
+void twoparity_Receiver();
+
+#endif
+
+
+#include "twohead.h"
+void twoparity_Sender(struct Data *f)
+{
+    int size = f->datalength;
+    char input[2000];
+    strcpy(input, f->data);
+    int i = 0, j = 0;
+    int rows = 0;
+    int cols = 8;
+
+    while(j < size)
+    {
+        i++;
+        if(i == 7)
+        {
+            rows++;
+            i = 0;
+        }
+        j++;
+    }
+
+    if(i != 0)
+        rows++;
+
+    int matrix[rows + 1][cols];
+    int block[rows];
+
+    for(i = 0; i <= rows; i++)
+    {
+        for(j = 0; j < cols; j++)
+        {
+            matrix[i][j] = 0;
+        }
+    }
+
+    int s = 0;
+    for(i = 0; i < rows; i++)
+    {
+        block[i] = 0;
+        for(j = 0; j < cols - 1; j++)
+        {
+            if(s < size)
+                matrix[i][j] = input[s] - '0';
+            else
+                matrix[i][j] = 0;
+
+            s++;
+        }
+    }
+
+    int arr[cols - 1];
+    int index = 0;
+    int count = 0;
+    for(j = 0; j < cols - 1; j++)
+    {
+        count = 0;
+        for(i = 0; i < rows; i++)
+        {
+            if(matrix[i][j] == 1)
+                count++;
+        }
+
+        if(count % 2 == 1){
+            arr[index] = 0;
+        }
+        else{
+            arr[index] = 1;
+        }
+        index++;
+    }
+
+    for(i = 0; i < cols - 1; i++)
+    {
+        matrix[rows][i] = arr[i];
+    }
+
+    int arr1[rows];
+    index = 0;
+    for(i = 0; i < rows; i++)
+    {
+        count = 0;
+        for(j = 0; j < cols - 1; j++)
+        {
+            if(matrix[i][j] == 1)
+                count++;
+        }
+
+        if(count % 2 == 1){
+            arr1[index] = 0;
+        }
+        else{
+            arr1[index] = 1;
+        }
+        index++;
+    }
+
+    for(i = 0; i < rows; i++)
+    {
+        matrix[i][cols - 1] = arr1[i];
+    }
+    count = 0;
+
+    for(i = 0; i < cols - 1; i++)
+    {
+        if(matrix[rows][i] == 1)
+            count++;
+    }
+
+    if(count % 2 == 1){
+        matrix[rows][cols - 1] = 0;
+    }
+    else{
+        matrix[rows][cols - 1] = 1;
+    }
+    printf("\n TRANSMITTED ENCODED MATRIX (ODD PARITY) \n");
+    for(i = 0; i <= rows; i++)
+    {
+        if(i == rows) {
+            printf("ColP:  ");
+        } else {
+            printf("Row %d: ", i + 1);
+        }
+
+        for(j = 0; j < cols; j++)
+        {
+            if(j == cols - 1 && i != rows) {
+                printf("|   %d", matrix[i][j]);
+            } else if(j == cols - 1 && i == rows) {
+                printf("|   [%d]", matrix[i][j]);
+            } else {
+                printf("%d  ", matrix[i][j]);
+            }
+        }
+        printf("\n");
+    }
+
+    FILE *fp;
+    fp = fopen("transmission1.txt", "w");
+    if(fp == NULL)
+    {
+        printf("\nFile cannot be opened.\n");
+        return;
+    }
+
+    for(i = 0; i <= rows; i++)
+    {
+        for(j = 0; j < cols; j++)
+        {
+            fprintf(fp, "%d", matrix[i][j]);
+        }
+    }
+
+    fclose(fp);
+    printf("\n Data packet saved to transmission1.txt\n");
+    char choice;
+    int pos;
+    char bit;
+
+    printf("\nwant to inject a bit error? (y/n): ");
+    scanf(" %c", &choice);
+    fp = fopen("transmission1.txt", "r+");
+    while(choice == 'y' || choice == 'Y')
+    {
+        printf("Enter the bit position to flip: ");
+        scanf("%d", &pos);
+        fseek(fp, pos - 1, SEEK_SET);
+        bit = fgetc(fp);
+        fseek(fp, -1, SEEK_CUR);
+        if(bit == '0')
+            fputc('1', fp);
+        else
+            fputc('0', fp);
+
+        printf("Flip another bit? (y/n): ");
+        scanf(" %c", &choice);
+    }
+
+    fclose(fp);
+}
+
+void twoparity_Receiver()
+{
+    FILE *fp;
+    char ch;
+    int size = 0;
+    int rows = 0;
+    int cols = 8;
+    int i, j;
+    fp = fopen("transmission1.txt", "r");
+    if(fp == NULL)
+    {
+        printf("\nFile cannot be opened.\n");
+        return;
+    }
+
+    while((ch = fgetc(fp)) != EOF)
+    {
+        if(ch == '0' || ch == '1')
+            size++;
+    }
+
+    rows = size / 8;
+    rewind(fp);
+    int matrix[rows][cols];
+
+    for(i = 0; i < rows; i++)
+    {
+        for(j = 0; j < cols; j++)
+        {
+            matrix[i][j] = fgetc(fp) - '0';
+        }
+    }
+
+    fclose(fp);
+    printf("\n RECEIVED INCOMING MATRIX \n");
+    for(i = 0; i < rows; i++)
+    {
+        if(i == rows - 1) {
+            printf("ColP:  ");
+        } else {
+            printf("Row %d: ", i + 1);
+        }
+
+        for(j = 0; j < cols; j++)
+        {
+            if(j == cols - 1 && i != rows - 1) {
+                printf("|   %d", matrix[i][j]);
+            } else if(j == cols - 1 && i == rows - 1) {
+                printf("|   [%d]", matrix[i][j]);
+            } else {
+                printf("%d  ", matrix[i][j]);
+            }
+        }
+        printf("\n");
+    }
+
+    int temp[rows][cols];
+
+    for(i = 0; i < rows; i++)
+    {
+        for(j = 0; j < cols; j++)
+        {
+            temp[i][j] = 0;
+        }
+    }
+
+    for(i = 0; i < rows - 1; i++)
+    {
+        for(j = 0; j < cols - 1; j++)
+        {
+            temp[i][j] = matrix[i][j];
+        }
+    }
+
+    int count;
+    for(j = 0; j < cols - 1; j++)
+    {
+        count = 0;
+        for(i = 0; i < rows - 1; i++)
+        {
+            if(temp[i][j] == 1)
+                count++;
+        }
+        if(count % 2 == 1){
+            temp[rows - 1][j] = 0;
+        }
+        else{
+            temp[rows - 1][j] = 1;
+        }
+    }
+
+    for(i = 0; i < rows - 1; i++)
+    {
+        count = 0;
+        for(j = 0; j < cols - 1; j++)
+        {
+            if(temp[i][j] == 1)
+                count++;
+        }
+        if(count % 2 == 1){
+            temp[i][cols - 1] = 0;
+        }
+        else{
+            temp[i][cols - 1] = 1;
+        }
+    }
+
+    count = 0;
+    for(i = 0; i < cols - 1; i++)
+    {
+        if(temp[rows - 1][i] == 1)
+            count++;
+    }
+    if(count % 2 == 1){
+        temp[rows - 1][cols - 1] = 0;
+    }
+    else{
+        temp[rows - 1][cols - 1] = 1;
+    }
+
+    int rowError = -1;
+    int colError = -1;
+    int rowCount = 0;
+    int colCount = 0;
+
+    for(i = 0; i < rows - 1; i++)
+    {
+        if(temp[i][cols - 1] != matrix[i][cols - 1])
+        {
+            rowError = i;
+            rowCount++;
+        }
+    }
+
+    for(j = 0; j < cols - 1; j++)
+    {
+        if(temp[rows - 1][j] != matrix[rows - 1][j])
+        {
+            colError = j;
+            colCount++;
+        }
+    }
+    printf("\n RECALCULATED EXPECTED MATRIX \n");
+    for(i = 0; i < rows; i++)
+    {
+        if(i == rows - 1) {
+            printf("ColP:  ");
+        } else {
+            printf("Row %d: ", i + 1);
+        }
+
+        for(j = 0; j < cols; j++)
+        {
+            if(j == cols - 1 && i != rows - 1) {
+                printf("|   %d", temp[i][j]);
+            } else if(j == cols - 1 && i == rows - 1) {
+                printf("|   [%d]", temp[i][j]);
+            } else {
+                printf("%d  ", temp[i][j]);
+            }
+        }
+        printf("\n");
+    }
+    printf("             Final result           \n");
+
+    if(temp[rows - 1][cols - 1] != matrix[rows - 1][cols - 1])
+    {
+        printf("Error detected overall!\n");
+    }
+
+    if(rowCount == 0 && colCount == 0)
+    {
+        if(temp[rows - 1][cols - 1] != matrix[rows - 1][cols - 1])
+        {
+            printf("\n");
+        }
+        else
+        {
+            printf("Data received cleanly with no errors.\n");
+        }
+    }
+    else if(rowCount == 1 && colCount == 1)
+    {
+        printf("Single Bit Corrupted (Recoverable).\n");
+    }
+    else
+    {
+        printf("Unrecoverable Multiple Bit Errors Detected.\n");
+    }
+}
+
+
+#include "twohead.h"
+
+int main()
+{
+    struct Data f;
+
+    printf("=========================================\n");
+    printf("   2D PARITY GENERATOR & DETECTOR        \n");
+    printf("=========================================\n");
+    printf("Enter Binary Data : ");
+    scanf("%s", f.data);
+
+    f.datalength = strlen(f.data);
+
+    twoparity_Sender(&f);
+
+    printf("\n=========================================\n");
+    printf("              RECEIVER SIDE              \n");
+    printf("=========================================\n");
+
+    twoparity_Receiver();
+
+    return 0;
+}
+[24bcs111@mepcolinux ex2a]$./pp
+=========================================
+   2D PARITY GENERATOR & DETECTOR
+=========================================
+Enter Binary Data : 101100101101001100110
+
+ TRANSMITTED ENCODED MATRIX (ODD PARITY)
+Row 1: 1  0  1  1  0  0  1  |   1
+Row 2: 0  1  1  0  1  0  0  |   0
+Row 3: 1  1  0  0  1  1  0  |   1
+ColP:  1  1  1  0  1  0  0  |   [1]
+
+ Data packet saved to transmission1.txt
+
+want to inject a bit error? (y/n): n
+
+=========================================
+              RECEIVER SIDE
+=========================================
+
+ RECEIVED INCOMING MATRIX
+Row 1: 1  0  1  1  0  0  1  |   1
+Row 2: 0  1  1  0  1  0  0  |   0
+Row 3: 1  1  0  0  1  1  0  |   1
+ColP:  1  1  1  0  1  0  0  |   [1]
+
+ RECALCULATED EXPECTED MATRIX
+Row 1: 1  0  1  1  0  0  1  |   1
+Row 2: 0  1  1  0  1  0  0  |   0
+Row 3: 1  1  0  0  1  1  0  |   1
+ColP:  1  1  1  0  1  0  0  |   [1]
+             Final result
+Data received cleanly with no errors.
+[24bcs111@mepcolinux ex2a]$./pp
+=========================================
+   2D PARITY GENERATOR & DETECTOR
+=========================================
+Enter Binary Data : 101100101101001100110
+
+ TRANSMITTED ENCODED MATRIX (ODD PARITY)
+Row 1: 1  0  1  1  0  0  1  |   1
+Row 2: 0  1  1  0  1  0  0  |   0
+Row 3: 1  1  0  0  1  1  0  |   1
+ColP:  1  1  1  0  1  0  0  |   [1]
+
+ Data packet saved to transmission1.txt
+
+want to inject a bit error? (y/n): y
+Enter the bit position to flip: 2
+Flip another bit? (y/n): y
+Enter the bit position to flip: 5
+Flip another bit? (y/n): n
+
+=========================================
+              RECEIVER SIDE
+=========================================
+
+ RECEIVED INCOMING MATRIX
+Row 1: 1  1  1  1  1  0  1  |   1
+Row 2: 0  1  1  0  1  0  0  |   0
+Row 3: 1  1  0  0  1  1  0  |   1
+ColP:  1  1  1  0  1  0  0  |   [1]
+
+ RECALCULATED EXPECTED MATRIX
+Row 1: 1  1  1  1  1  0  1  |   1
+Row 2: 0  1  1  0  1  0  0  |   0
+Row 3: 1  1  0  0  1  1  0  |   1
+ColP:  1  0  1  0  0  0  0  |   [1]
+             Final result
+Unrecoverable Multiple Bit Errors Detected.
+
+#ifndef HEAD1_H
+#define HEAD1_H
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+long btoD(char bin[], int K);
+void dtoB(long num, int K, char bin[]);
+long wrapsum(long sum, int K);
+
+void inpData(char data[], int *K);
+
+char *appD(char data[], int K, int *nl);
+
+long *genB(char pad[], int nl, int K, int *nb);
+
+long persen(long *bl, int nb, int K);
+int perrec(long *bl, int nb, long ch, int K);
+
+void injectErrorChecksum(char data[]);
+
+#endif
+
+#include "head1.h"
+
+long btoD(char bin[], int K)
+{
+    long num = 0;
+    int i;
+
+    for (i = 0; i < K; i++)
+    {
+        num = num * 2 + (bin[i] - '0');
+    }
+
+    return num;
+}
+
+
+void dtoB(long num, int K, char bin[])
+{
+    int i;
+
+    for (i = K - 1; i >= 0; i--)
+    {
+        bin[i] = (num % 2) + '0';
+        num /= 2;
+    }
+
+    bin[K] = '\0';
+}
+
+
+void inpData(char data[], int *K)
+{
+    printf("Enter binary string: ");
+    scanf("%999s", data);
+
+    printf("Enter block size K: ");
+    scanf("%d", K);
+}
+
+
+long wrapsum(long sum, int K)
+{
+    long mv;
+    long ca;
+
+    mv = (1L << K) - 1;
+
+    while (sum > mv)
+    {
+        ca = sum >> K;
+        sum = (sum & mv) + ca;
+    }
+
+    return sum;
+}
+
+
+char *appD(char data[], int K, int *nl)
+{
+    int L;
+    int P;
+    int i;
+    char *Pa;
+
+    L = strlen(data);
+
+    if (L % K == 0)
+        P = 0;
+    else
+        P = K - (L % K);
+
+    *nl = L + P;
+
+    Pa = (char *)malloc((*nl + 1) * sizeof(char));
+
+    if (Pa == NULL)
+    {
+        printf("Memory allocation failed!\n");
+        exit(1);
+    }
+
+    for (i = 0; i < P; i++)
+    {
+        Pa[i] = '0';
+    }
+
+    strcpy(Pa + P, data);
+
+    return Pa;
+}
+
+
+long *genB(char pad[], int nl, int K, int *nb)
+{
+    int i;
+    char temp[65];
+    long *values;
+
+    *nb = nl / K;
+
+    values = (long *)malloc((*nb) * sizeof(long));
+
+    if (values == NULL)
+    {
+        printf("Memory allocation failed!\n");
+        exit(1);
+    }
+
+    for (i = 0; i < *nb; i++)
+    {
+        strncpy(temp, pad + i * K, K);
+        temp[K] = '\0';
+
+        values[i] = btoD(temp, K);
+    }
+
+    return values;
+}
+
+
+long persen(long *bl, int nb, int K)
+{
+    long sum;
+    long checks;
+    long mask;
+    int i;
+
+    sum = 0;
+
+    for (i = 0; i < nb; i++)
+    {
+        sum += bl[i];
+        sum = wrapsum(sum, K);
+    }
+
+    mask = (1L << K) - 1;
+    checks = (~sum) & mask;
+
+    return checks;
+}
+
+
+int perrec(long *bl, int nb, long ch, int K)
+{
+    long ver;
+    long res;
+    long mask;
+    int i;
+
+    ver = ch;
+
+    for (i = 0; i < nb; i++)
+    {
+        ver += bl[i];
+        ver = wrapsum(ver, K);
+    }
+
+    mask = (1L << K) - 1;
+    res = (~ver) & mask;
+
+    if (res == 0)
+        return 1;
+    else
+        return 0;
+}
+
+
+void injectErrorChecksum(char data[])
+{
+    int choice;
+    int num_errors;
+    int pos;
+    int k;
+    int len;
+
+    len = strlen(data);
+
+    printf("\nDo you want to inject error(s)? (1 for Yes, 0 for No): ");
+    scanf("%d", &choice);
+
+    if (choice == 1)
+    {
+        printf("Enter number of bits to flip: ");
+        scanf("%d", &num_errors);
+
+        for (k = 0; k < num_errors; k++)
+        {
+            printf(
+                "Enter bit position (0 to %d) to flip for error #%d: ",
+                len - 1,
+                k + 1
+            );
+
+            scanf("%d", &pos);
+
+            if (pos >= 0 && pos < len)
+            {
+                if (data[pos] == '0')
+                    data[pos] = '1';
+                else
+                    data[pos] = '0';
+
+                printf(
+                    "Bit at position %d flipped! New string: %s\n",
+                    pos,
+                    data
+                );
+            }
+            else
+            {
+                printf("Invalid position! Skipped.\n");
+            }
+        }
+    }
+}
+
+
+
+#include "head1.h"
+
+int main()
+{
+    char data[1000];
+    int K;
+    int nl;
+    int nb;
+
+    char *pa;
+    long *bl;
+    long chse;
+
+    char rec_data[1000];
+    int rec_K;
+    long rec_chse;
+
+    int rec_nl;
+    int rec_nb;
+    char *rec_pa;
+    long *rec_bl;
+
+    int a;
+
+    /* =========================
+       SENDER
+       ========================= */
+
+    inpData(data, &K);
+
+    pa = appD(data, K, &nl);
+    bl = genB(pa, nl, K, &nb);
+
+    chse = persen(bl, nb, K);
+
+    printf("\nGenerated checksum: %ld\n", chse);
+
+    /*
+       Error injection is done before
+       writing the transmitted data.
+    */
+    injectErrorChecksum(data);
+
+    /* Save transmitted data to file */
+    {
+        FILE *fp;
+
+        fp = fopen("transmitted_data.txt", "w");
+
+        if (fp == NULL)
+        {
+            printf("Error opening file for writing!\n");
+            free(pa);
+            free(bl);
+            return 1;
+        }
+
+        fprintf(fp, "%s %d %ld\n", data, K, chse);
+
+        fclose(fp);
+    }
+
+    printf(
+        "\n[Sender] Transmitted data and checksum "
+        "successfully saved to 'transmitted_data.txt'.\n"
+    );
+
+
+    /* =========================
+       RECEIVER
+       ========================= */
+
+    {
+        FILE *fp;
+
+        fp = fopen("transmitted_data.txt", "r");
+
+        if (fp == NULL)
+        {
+            printf("Error opening file for reading!\n");
+
+            free(pa);
+            free(bl);
+
+            return 1;
+        }
+
+        fscanf(
+            fp,
+            "%999s %d %ld",
+            rec_data,
+            &rec_K,
+            &rec_chse
+        );
+
+        fclose(fp);
+    }
+
+    printf(
+        "[Receiver] Successfully read data from "
+        "'transmitted_data.txt'.\n\n"
+    );
+
+    /* Process received data */
+    rec_pa = appD(rec_data, rec_K, &rec_nl);
+
+    rec_bl = genB(
+        rec_pa,
+        rec_nl,
+        rec_K,
+        &rec_nb
+    );
+
+    /* Verify checksum */
+    a = perrec(
+        rec_bl,
+        rec_nb,
+        rec_chse,
+        rec_K
+    );
+
+    if (a == 1)
+    {
+        printf("Result: No error\n");
+    }
+    else
+    {
+        printf("Result: Error detected\n");
+    }
+
+
+    /* Free dynamically allocated memory */
+    free(pa);
+    free(bl);
+    free(rec_pa);
+    free(rec_bl);
+
+    return 0;
+}
+
+
+[24bcs111@mepcolinux ex2a]$./cs
+Enter binary string: 10101101
+Enter block size K: 4
+
+Generated checksum: 7
+
+Do you want to inject error(s)? (1 for Yes, 0 for No): 0
+
+[Sender] Transmitted data and checksum successfully saved to 'transmitted_data.txt'.
+[Receiver] Successfully read data from 'transmitted_data.txt'.
+
+Result: No error
+[24bcs111@mepcolinux ex2a]$./cs
+Enter binary string: 10101101
+Enter block size K: 4
+
+Generated checksum: 7
+
+Do you want to inject error(s)? (1 for Yes, 0 for No): 1
+Enter number of bits to flip: 2
+Enter bit position (0 to 7) to flip for error #1: 3
+Bit at position 3 flipped! New string: 10111101
+Enter bit position (0 to 7) to flip for error #2: 5
+Bit at position 5 flipped! New string: 10111001
+
+[Sender] Transmitted data and checksum successfully saved to 'transmitted_data.txt'.
+[Receiver] Successfully read data from 'transmitted_data.txt'.
+
+Result: Error detected
+
+#ifndef HDLC_H
+#define HDLC_H
+
+#include <stdint.h>
+
+#define FLAG "01111110"
+#define ADDR "11111111"
+#define CTRL "00000000"
+#define POLY 0x1021
+#define DATA_SZ 32
+
+uint16_t calculate_crc_polynomial(const char *data, int append_zeros);
+void bit_stuff(const char *in, char *out);
+void bit_destuff(const char *in, char *out);
+void sender();
+void receiver();
+
+#endif // HDLC_H
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "hdlc.h"
+
+// --- Polynomial CRC Calculation ---
+uint16_t calculate_crc_polynomial(const char *data, int append_zeros) {
+    uint16_t crc = 0x0000;
+    for (int i = 0; data[i] != '\0'; i++) {
+        uint8_t bit = data[i] - '0';
+        uint8_t msb = (crc >> 15) & 1;
+        crc = (crc << 1) | bit;
+        if (msb) crc ^= POLY;
+    }
+    if (append_zeros) {
+        for (int i = 0; i < 16; i++) {
+            uint8_t msb = (crc >> 15) & 1;
+            crc = (crc << 1);
+            if (msb) crc ^= POLY;
+        }
+    }
+    return crc;
+}
+
+// --- Specific Bit Stuffing: Stuff '0' if '0' followed by five '1's ---
+void bit_stuff(const char *in, char *out) {
+    int j = 0;
+    for (int i = 0; in[i] != '\0'; i++) {
+        out[j++] = in[i];
+
+        if (in[i] == '0' &&
+            in[i+1] == '1' && in[i+2] == '1' && in[i+3] == '1' &&
+            in[i+4] == '1' && in[i+5] == '1')
+        {
+            for(int k = 1; k <= 5; k++) out[j++] = in[i+k];
+            out[j++] = '0';
+            i += 5;
+        }
+    }
+    out[j] = '\0';
+}
+
+// --- Specific Bit Destuffing ---
+void bit_destuff(const char *in, char *out) {
+    int j = 0;
+    for (int i = 0; in[i] != '\0'; i++) {
+        out[j++] = in[i];
+
+        if (in[i] == '0' &&
+            in[i+1] == '1' && in[i+2] == '1' && in[i+3] == '1' &&
+            in[i+4] == '1' && in[i+5] == '1' && in[i+6] == '0')
+        {
+            for(int k = 1; k <= 5; k++) out[j++] = in[i+k];
+            i += 6;
+        }
+    }
+    out[j] = '\0';
+}
+
+// --- Sender ---
+void sender() {
+    char input_stream[1024];
+    printf("\n[SENDER] Enter the binary data stream: ");
+    scanf("%s", input_stream);
+
+    FILE *fp = fopen("hdlc_frames.txt", "w");
+    if (fp == NULL) return;
+
+    int len = strlen(input_stream);
+    int k = 0;
+    int frame_num = 1;
+
+    while (k < len) {
+        char data[DATA_SZ + 1];
+        int remaining_bits = len - k;
+        int chunk_size = (remaining_bits < DATA_SZ) ? remaining_bits : DATA_SZ;
+
+        int pad_size = DATA_SZ - chunk_size;
+        for (int i = 0; i < pad_size; i++) data[i] = '0';
+        for (int i = 0; i < chunk_size; i++) data[pad_size + i] = input_stream[k++];
+        data[DATA_SZ] = '\0';
+
+        char payload[100];
+        sprintf(payload, "%s%s%s", ADDR, CTRL, data);
+
+        uint16_t crc_val = calculate_crc_polynomial(payload, 1);
+        char crc_str[17];
+        for (int i = 0; i < 16; i++) {
+            crc_str[i] = ((crc_val >> (15 - i)) & 1) ? '1' : '0';
+        }
+        crc_str[16] = '\0';
+
+        char full_payload[150];
+        sprintf(full_payload, "%s%s", payload, crc_str);
+
+        char stuffed_payload[200];
+        bit_stuff(full_payload, stuffed_payload);
+
+        char final_frame[256];
+        sprintf(final_frame, "%s%s%s", FLAG, stuffed_payload, FLAG);
+
+        printf("\n--- Generating Frame %d ---\n", frame_num++);
+        printf("Data chunk     : %s\n", data);
+        printf("Calculated CRC : %s\n", crc_str); // <-- Removed Hex here
+        printf("Stuffed Payload: %s\n", stuffed_payload);
+        printf("Final HDLC     : %s\n", final_frame);
+
+        fprintf(fp, "%s\n", final_frame);
+    }
+
+    fclose(fp);
+    printf("\n[SENDER] Frame(s) successfully written to 'hdlc_frames.txt'.\n");
+}
+
+// --- Receiver ---
+void receiver() {
+    FILE *fp = fopen("hdlc_frames.txt", "r");
+    if (fp == NULL) {
+        printf("\n[RECEIVER] Error: 'hdlc_frames.txt' not found!\n");
+        return;
+    }
+
+    char frame[256];
+    int frame_num = 1;
+
+    while (fscanf(fp, "%s", frame) != EOF) {
+        printf("\n--- Processing Received Frame %d ---\n", frame_num++);
+
+        int frame_len = strlen(frame);
+        char stuffed_payload[200];
+        strncpy(stuffed_payload, frame + 8, frame_len - 16);
+        stuffed_payload[frame_len - 16] = '\0';
+
+        char destuffed_payload[200];
+        bit_destuff(stuffed_payload, destuffed_payload);
+
+        uint16_t remainder = calculate_crc_polynomial(destuffed_payload, 0);
+
+        if (remainder != 0) {
+            // Convert the error remainder back to a binary string
+            char rem_str[17];
+            for (int i = 0; i < 16; i++) {
+                rem_str[i] = ((remainder >> (15 - i)) & 1) ? '1' : '0';
+            }
+            rem_str[16] = '\0';
+
+            printf("[RECEIVER] Status: ERROR DETECTED (CRC failed, Remainder: %s)\n", rem_str); // <-- Replaced Hex with Binary string
+        } else {
+            char extracted_data[DATA_SZ + 1];
+            strncpy(extracted_data, destuffed_payload + 16, DATA_SZ);
+            extracted_data[DATA_SZ] = '\0';
+
+            char received_crc[17];
+            strncpy(received_crc, destuffed_payload + strlen(destuffed_payload) - 16, 16);
+            received_crc[16] = '\0';
+
+            printf("Destuffed Payload: %s\n", destuffed_payload);
+            printf("Received CRC     : %s\n", received_crc);
+            printf("Status           : CORRECT\n");
+            printf("Extracted Data   : %s\n", extracted_data);
+        }
+    }
+
+    fclose(fp);
+}
+#include <stdio.h>
+#include <stdlib.h>
+#include "hdlc.h"
+
+int main() {
+    int choice;
+
+    while (1) {
+        printf("\n=================================\n");
+        printf("       HDLC FRAME SIMULATOR      \n");
+        printf("=================================\n");
+        printf("1. Sender (Generate & Save Frames)\n");
+        printf("2. Receiver (Read & Check Frames)\n");
+        printf("3. Exit\n");
+        printf("Enter your choice: ");
+
+        if (scanf("%d", &choice) != 1) {
+            printf("Invalid input. Exiting...\n");
+            break;
+        }
+
+        switch (choice) {
+            case 1:
+                sender();
+                break;
+            case 2:
+                receiver();
+                break;
+            case 3:
+                printf("Exiting program.\n");
+                exit(0);
+            default:
+                printf("Invalid choice. Please select 1, 2, or 3.\n");
+        }
+    }
+
+    return 0;
+}
+
+[24bcs111@mepcolinux ex2a]$./crc
+
+=================================
+       HDLC FRAME SIMULATOR
+=================================
+1. Sender (Generate & Save Frames)
+2. Receiver (Read & Check Frames)
+3. Exit
+Enter your choice: 1
+
+[SENDER] Enter the binary data stream: 11011011000111101001111001101110
+
+--- Generating Frame 1 ---
+Data chunk     : 11011011000111101001111001101110
+Calculated CRC : 0000110001001101
+Stuffed Payload: 1111111100000000110110110001111010011110011011100000110001001101
+Final HDLC     : 01111110111111110000000011011011000111101001111001101110000011000100110101111110
+
+[SENDER] Frame(s) successfully written to 'hdlc_frames.txt'.
+
+=================================
+       HDLC FRAME SIMULATOR
+=================================
+1. Sender (Generate & Save Frames)
+2. Receiver (Read & Check Frames)
+3. Exit
+Enter your choice: 2
+
+--- Processing Received Frame 1 ---
+Destuffed Payload: 1111111100000000110110110001111010011110011011100000110001001101
+Received CRC     : 0000110001001101
+Status           : CORRECT
+Extracted Data   : 11011011000111101001111001101110
+
+=================================
+       HDLC FRAME SIMULATOR
+=================================
+1. Sender (Generate & Save Frames)
+2. Receiver (Read & Check Frames)
+3. Exit
+Enter your choice: 3
+Exiting program.
+[24bcs111@mepcolinux ex2a]$ls
+app.c  app1.c  app2.c  crc  cs  hdlc.h  hdlc_frames.txt  head1.h  imp.c  imp1.c  imp2.c  pp  transmission1.txt  transmitted_data.txt  twohead.h
+[24bcs111@mepcolinux ex2a]$vi transmitted_data.txt
+[24bcs111@mepcolinux ex2a]$[24bcs111@mepcolinux ex2a]$vi hdlc_frames.txt
+[24bcs111@mepcolinux ex2a]$[24bcs111@mepcolinux ex2a]$./crc
+
+=================================
+       HDLC FRAME SIMULATOR
+=================================
+1. Sender (Generate & Save Frames)
+2. Receiver (Read & Check Frames)
+3. Exit
+Enter your choice: 2
+
+--- Processing Received Frame 1 ---
+[RECEIVER] Status: ERROR DETECTED (CRC failed, Remainder: 1111011010001010)
+
+=================================
+       HDLC FRAME SIMULATOR
+=================================
+1. Sender (Generate & Save Frames)
+2. Receiver (Read & Check Frames)
+3. Exit
+Enter your choice: 3
+Exiting program.
