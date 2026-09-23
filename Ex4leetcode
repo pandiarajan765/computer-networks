@@ -1,0 +1,289 @@
+pgm:815
+#include <stdlib.h>
+#include <string.h>
+
+int numBusesToDestination(int** routes, int routesSize, int* routesColSize, int source, int target) {
+    if (source == target) return 0;
+    int maxStop = 0;
+    for (int i = 0; i < routesSize; i++) {
+        for (int j = 0; j < routesColSize[i]; j++) {
+            if (routes[i][j] > maxStop) maxStop = routes[i][j];
+        }
+    }
+    if (source > maxStop || target > maxStop) return -1;
+    
+    int* stopCount = (int*)calloc(maxStop + 1, sizeof(int));
+    for (int i = 0; i < routesSize; i++) {
+        for (int j = 0; j < routesColSize[i]; j++) {
+            stopCount[routes[i][j]]++;
+        }
+    }
+    
+    int** stopToBuses = (int**)malloc((maxStop + 1) * sizeof(int*));
+    int* stopIdx = (int*)calloc(maxStop + 1, sizeof(int));
+    for (int i = 0; i <= maxStop; i++) {
+        if (stopCount[i] > 0) {
+            stopToBuses[i] = (int*)malloc(stopCount[i] * sizeof(int));
+        } else {
+            stopToBuses[i] = NULL;
+        }
+    }
+    
+    for (int i = 0; i < routesSize; i++) {
+        for (int j = 0; j < routesColSize[i]; j++) {
+            int stop = routes[i][j];
+            stopToBuses[stop][stopIdx[stop]++] = i;
+        }
+    }
+    
+    int* queue = (int*)malloc(100000 * sizeof(int));
+    int head = 0, tail = 0;
+    
+    int* visitedBuses = (int*)calloc(routesSize, sizeof(int));
+    int* visitedStops = (int*)calloc(maxStop + 1, sizeof(int));
+    
+    queue[tail++] = source;
+    visitedStops[source] = 1;
+    int ans = 0;
+    
+    while (head < tail) {
+        int size = tail - head;
+        for (int i = 0; i < size; i++) {
+            int currStop = queue[head++];
+            if (currStop == target) {
+                free(stopCount);
+                free(stopIdx);
+                for (int j = 0; j <= maxStop; j++) free(stopToBuses[j]);
+                free(stopToBuses);
+                free(queue);
+                free(visitedBuses);
+                free(visitedStops);
+                return ans;
+            }
+            for (int j = 0; j < stopCount[currStop]; j++) {
+                int bus = stopToBuses[currStop][j];
+                if (visitedBuses[bus]) continue;
+                visitedBuses[bus] = 1;
+                for (int k = 0; k < routesColSize[bus]; k++) {
+                    int nextStop = routes[bus][k];
+                    if (!visitedStops[nextStop]) {
+                        visitedStops[nextStop] = 1;
+                        queue[tail++] = nextStop;
+                    }
+                }
+            }
+        }
+        ans++;
+    }
+    
+    free(stopCount);
+    free(stopIdx);
+    for (int j = 0; j <= maxStop; j++) free(stopToBuses[j]);
+    free(stopToBuses);
+    free(queue);
+    free(visitedBuses);
+    free(visitedStops);
+    return -1;
+}
+pgm:1466
+#include <stdlib.h>
+
+struct Edge {
+    int to;
+    int dir;
+    struct Edge* next;
+};
+
+void dfs(int node, int parent, struct Edge** adj, int* ans) {
+    struct Edge* curr = adj[node];
+    while (curr != NULL) {
+        if (curr->to != parent) {
+            if (curr->dir == 1) (*ans)++;
+            dfs(curr->to, node, adj, ans);
+        }
+        curr = curr->next;
+    }
+}
+
+int minReorder(int n, int** connections, int connectionsSize, int* connectionsColSize) {
+    struct Edge** adj = (struct Edge**)calloc(n, sizeof(struct Edge*));
+    struct Edge* pool = (struct Edge*)malloc(2 * connectionsSize * sizeof(struct Edge));
+    int poolIdx = 0;
+    
+    for (int i = 0; i < connectionsSize; i++) {
+        int u = connections[i][0];
+        int v = connections[i][1];
+        
+        pool[poolIdx].to = v;
+        pool[poolIdx].dir = 1;
+        pool[poolIdx].next = adj[u];
+        adj[u] = &pool[poolIdx++];
+        
+        pool[poolIdx].to = u;
+        pool[poolIdx].dir = 0;
+        pool[poolIdx].next = adj[v];
+        adj[v] = &pool[poolIdx++];
+    }
+    
+    int ans = 0;
+    dfs(0, -1, adj, &ans);
+    
+    free(pool);
+    free(adj);
+    return ans;
+}
+pgm:743
+#include <stdlib.h>
+
+struct Edge743 {
+    int to;
+    int weight;
+    struct Edge743* next;
+};
+
+int networkDelayTime(int** times, int timesSize, int* timesColSize, int n, int k) {
+    struct Edge743** adj = (struct Edge743**)calloc(n + 1, sizeof(struct Edge743*));
+    struct Edge743* pool = (struct Edge743*)malloc(timesSize * sizeof(struct Edge743));
+    
+    for (int i = 0; i < timesSize; i++) {
+        int u = times[i][0];
+        int v = times[i][1];
+        int w = times[i][2];
+        pool[i].to = v;
+        pool[i].weight = w;
+        pool[i].next = adj[u];
+        adj[u] = &pool[i];
+    }
+    
+    int* dist = (int*)malloc((n + 1) * sizeof(int));
+    for (int i = 1; i <= n; i++) dist[i] = 1e9;
+    dist[k] = 0;
+    
+    int* visited = (int*)calloc(n + 1, sizeof(int));
+    
+    for (int i = 0; i < n; i++) {
+        int u = -1;
+        int minDist = 1e9;
+        for (int j = 1; j <= n; j++) {
+            if (!visited[j] && dist[j] < minDist) {
+                minDist = dist[j];
+                u = j;
+            }
+        }
+        if (u == -1) break;
+        visited[u] = 1;
+        
+        struct Edge743* curr = adj[u];
+        while (curr != NULL) {
+            if (dist[u] + curr->weight < dist[curr->to]) {
+                dist[curr->to] = dist[u] + curr->weight;
+            }
+            curr = curr->next;
+        }
+    }
+    
+    int maxDist = 0;
+    for (int i = 1; i <= n; i++) {
+        if (dist[i] == 1e9) {
+            free(adj);
+            free(pool);
+            free(dist);
+            free(visited);
+            return -1;
+        }
+        if (dist[i] > maxDist) maxDist = dist[i];
+    }
+    
+    free(adj);
+    free(pool);
+    free(dist);
+    free(visited);
+    return maxDist;
+}
+pgm:1631
+#include <stdlib.h>
+#include <math.h>
+
+struct Cell {
+    int r, c, effort;
+};
+
+int minimumEffortPath(int** heights, int heightsSize, int* heightsColSize) {
+    int rows = heightsSize;
+    int cols = heightsColSize[0];
+    
+    int** dist = (int**)malloc(rows * sizeof(int*));
+    for (int i = 0; i < rows; i++) {
+        dist[i] = (int*)malloc(cols * sizeof(int));
+        for (int j = 0; j < cols; j++) dist[i][j] = 1e9;
+    }
+    dist[0][0] = 0;
+    
+    struct Cell* heap = (struct Cell*)malloc(rows * cols * 4 * sizeof(struct Cell));
+    int heapSize = 0;
+    
+    heap[heapSize++] = (struct Cell){0, 0, 0};
+    
+    int dr[] = {-1, 1, 0, 0};
+    int dc[] = {0, 0, -1, 1};
+    
+    while (heapSize > 0) {
+        int minIdx = 0;
+        for (int i = 1; i < heapSize; i++) {
+            if (heap[i].effort < heap[minIdx].effort) minIdx = i;
+        }
+        
+        struct Cell curr = heap[minIdx];
+        heap[minIdx] = heap[--heapSize];
+        
+        if (curr.effort > dist[curr.r][curr.c]) continue;
+        if (curr.r == rows - 1 && curr.c == cols - 1) break;
+        
+        for (int i = 0; i < 4; i++) {
+            int nr = curr.r + dr[i];
+            int nc = curr.c + dc[i];
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+                int diff = abs(heights[curr.r][curr.c] - heights[nr][nc]);
+                int maxEffort = curr.effort > diff ? curr.effort : diff;
+                if (maxEffort < dist[nr][nc]) {
+                    dist[nr][nc] = maxEffort;
+                    heap[heapSize++] = (struct Cell){nr, nc, maxEffort};
+                }
+            }
+        }
+    }
+    
+    int ans = dist[rows - 1][cols - 1];
+    for (int i = 0; i < rows; i++) free(dist[i]);
+    free(dist);
+    free(heap);
+    return ans;
+}
+pgm:787
+#include <stdlib.h>
+#include <string.h>
+
+int findCheapestPrice(int n, int** flights, int flightsSize, int* flightsColSize, int src, int dst, int k) {
+    int* dist = (int*)malloc(n * sizeof(int));
+    int* temp = (int*)malloc(n * sizeof(int));
+    for (int i = 0; i < n; i++) dist[i] = 1e9;
+    dist[src] = 0;
+    
+    for (int i = 0; i <= k; i++) {
+        memcpy(temp, dist, n * sizeof(int));
+        for (int j = 0; j < flightsSize; j++) {
+            int u = flights[j][0];
+            int v = flights[j][1];
+            int w = flights[j][2];
+            if (dist[u] != 1e9 && dist[u] + w < temp[v]) {
+                temp[v] = dist[u] + w;
+            }
+        }
+        memcpy(dist, temp, n * sizeof(int));
+    }
+    
+    int ans = dist[dst] == 1e9 ? -1 : dist[dst];
+    free(dist);
+    free(temp);
+    return ans;
+}
