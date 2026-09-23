@@ -1,0 +1,206 @@
+Script started on Tue Sep 22 22:44:40 2026
+[24bcs111@mepcolinux ex4]$cat head.h
+#ifndef DIJKSTRA_H
+#define DIJKSTRA_H
+
+#include <stdio.h>
+
+#define MAX 100
+#define INF 99999
+
+void dijkstra(int graph[MAX][MAX], int n, int source);
+
+#endif
+
+[24bcs111@mepcolinux ex4]$cat imp.c
+#include "head.h"
+
+// Helper function to find the first step from source to dest
+int getNextHop(int parent[], int source, int dest) {
+    if (dest == source) return source; // Arrived at source
+    if (parent[dest] == source) return dest; // Directly connected step
+    return getNextHop(parent, source, parent[dest]); // Move back one step
+}
+
+void dijkstra(int graph[MAX][MAX], int n, int source)
+{
+    int distance[MAX];
+    int visited[MAX];
+    int parent[MAX]; // Tracks the immediate predecessor node
+    int i, j, min, u;
+
+    for (i = 0; i < n; i++)
+    {
+        distance[i] = INF;
+        visited[i] = 0;
+        parent[i] = -1; // -1 means no parent assigned yet
+    }
+
+    distance[source] = 0;
+
+    for (i = 0; i < n - 1; i++)
+    {
+        min = INF;
+        u = -1;
+
+        for (j = 0; j < n; j++)
+        {
+            if (!visited[j] && distance[j] < min)
+            {
+                min = distance[j];
+                u = j;
+            }
+        }
+
+        if (u == -1)
+            break;
+
+        visited[u] = 1;
+
+        for (j = 0; j < n; j++)
+        {
+            if (graph[u][j] != 0 &&
+                !visited[j] &&
+                distance[u] + graph[u][j] < distance[j])
+            {
+                distance[j] = distance[u] + graph[u][j];
+                parent[j] = u; // Track that we reached 'j' through 'u'
+            }
+        }
+    }
+
+    printf("\n%-12s %-10s %-10s\n", "Destination", "Cost", "Next Hop");
+    printf("----------------------------------\n");
+
+    for (i = 0; i < n; i++)
+    {
+        if (distance[i] == INF) {
+            printf("To vertex %-2d: %-10s %-10s\n", i, "INF", "None");
+        }
+        else if (i == source) {
+            printf("To vertex %-2d: %-10d %-10s\n", i, distance[i], "- (Source)");
+        }
+        else {
+            int hop = getNextHop(parent, source, i);
+            printf("To vertex %-2d: %-10d %-10d\n", i, distance[i], hop);
+        }
+    }
+}
+[24bcs111@mepcolinux ex4]$cat app.c
+#include "head.h"
+
+int main()
+{
+    int graph[MAX][MAX] = {0};
+    int n;
+    int source, destination, weight;
+    int start;
+
+    printf("Enter number of vertices: ");
+    scanf("%d", &n);
+
+    printf("\nEnter edges as: source destination weight\n");
+    printf("Enter (0 0 0) to stop entering edges.\n\n");
+
+    while (1)
+    {
+        printf("Enter edge: ");
+        scanf("%d %d %d", &source, &destination, &weight);
+
+        if (source == 0 && destination == 0 && weight == 0)
+            break;
+
+        graph[source][destination] = weight;
+        graph[destination][source] = weight;
+    }
+
+    printf("\nEnter source vertex: ");
+    scanf("%d", &start);
+
+    dijkstra(graph, n, start);
+
+    return 0;
+}
+
+[24bcs111@mepcolinux ex4]$cat bellman.h
+#include <stdio.h>
+#include <limits.h>
+#define MAX 200
+int* bellman_ford(int graph[MAX][MAX], int n, int source);
+[24bcs111@mepcolinux ex4]$cat bellmanimp.c
+#include "bellman.h"
+int main() {
+    int graph[MAX][MAX];
+    int n, num_edges, src, i, j;
+    for(i = 0; i < MAX; i++) {
+        for(j = 0; j < MAX; j++) {
+            graph[i][j] = INT_MAX;
+        }
+    }
+    printf("Enter number of routers: ");
+    if (scanf("%d", &n) != 1 || n <= 0 || n > MAX) {
+        printf("Invalid number of routers.\n");
+        return 1;
+    }
+    printf("Enter number of edges: ");
+    if (scanf("%d", &num_edges) != 1 || num_edges < 0) {
+        printf("Invalid number of edges.\n");
+        return 1;
+    }
+    printf("Enter edges in format (source destination cost):\n");
+    for(i = 0; i < num_edges; i++) {
+        int u, v, cost;
+        if (scanf("%d %d %d", &u, &v, &cost) != 3) {
+            printf("Invalid data input format.\n");
+            return 1;
+        }
+        if(u < 1 || u > n || v < 1 || v > n) {
+            printf("Invalid router vertices. Try this edge again.\n");
+            i--;
+            continue;
+        }
+        graph[u - 1][v - 1] = cost;
+        graph[v - 1][u - 1] = cost;
+    }
+    printf("Enter source router: ");
+    if (scanf("%d", &src) != 1 || src < 1 || src > n) {
+        printf("Invalid source router.\n");
+        return 1;
+    }
+    src--;
+    int* result_dist = bellman_ford(graph, n, src);
+    if (result_dist == NULL) {
+        printf("Negative Circle exist in the graph\n");
+    } else {
+        printf("\nShortest paths from Router %d:\n", src + 1);
+        for (i = 0; i < n; i++) {
+            if (result_dist[i] == INT_MAX)
+                printf("Router %d -> Router %d = INF\n", src + 1, i + 1);
+            else
+                printf("Router %d -> Router %d = %d\n", src + 1, i + 1, result_dist[i]);
+        }
+    }
+    return 0;
+}
+[24bcs111@mepcolinux ex4]$cat bellmanapp.c
+#include "bellman.h"
+static int dist[MAX];
+int* bellman_ford(int graph[MAX][MAX], int n, int source)
+{
+    int i, u, v, count;
+    for (i = 0; i < n; i++)
+        dist[i] = INT_MAX;
+    dist[source] = 0;
+    for (count = 0; count < n - 1; count++)
+        for (u = 0; u < n; u++)
+            for (v = 0; v < n; v++)
+               if (graph[u][v] != INT_MAX && dist[u] != INT_MAX)
+                   if (dist[u] + graph[u][v] < dist[v])
+                       dist[v] = dist[u] + graph[u][v];
+    for (u = 0; u < n; u++)
+       for (v = 0; v < n; v++)
+           if (graph[u][v] != INT_MAX && dist[u] != INT_MAX)
+               if (dist[u] + graph[u][v] < dist[v])
+                   return NULL;
+    return dist;
+}
