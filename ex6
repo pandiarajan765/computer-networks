@@ -1,0 +1,278 @@
+pandiarajan@Pandiarajan:~/cn/ex6$ cat server.c
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <string.h>
+
+#define PORT 5000
+
+int main()
+{
+    int server_socket;
+    int client_socket;
+
+    struct sockaddr_in server_address;
+    struct sockaddr_in client_address;
+
+    socklen_t address_length;
+
+    char str[256];
+
+    /* Create socket */
+    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (server_socket < 0)
+    {
+        printf("Socket creation failed!\n");
+        return 1;
+    }
+
+    printf("Socket created successfully.\n");
+
+    /* Configure server address */
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server_address.sin_port = htons(PORT);
+
+    /* Bind socket */
+    if (bind(
+            server_socket,
+            (struct sockaddr *)&server_address,
+            sizeof(server_address)) < 0)
+    {
+        printf("Binding failed!\n");
+        close(server_socket);
+        return 1;
+    }
+
+    printf("Binding successful.\n");
+
+    /* Listen */
+    if (listen(server_socket, 5) < 0)
+    {
+        printf("Listening failed!\n");
+        close(server_socket);
+        return 1;
+    }
+
+    printf("Server is listening on port %d...\n", PORT);
+
+    /* Accept client */
+    address_length = sizeof(client_address);
+
+    client_socket = accept(
+        server_socket,
+        (struct sockaddr *)&client_address,
+        &address_length
+    );
+
+    if (client_socket < 0)
+    {
+        printf("Server could not accept client.\n");
+        close(server_socket);
+        return 1;
+    }
+
+    printf("Client connected successfully!\n");
+
+    /* Communication loop */
+    while (1)
+    {
+        int received;
+
+        memset(str, 0, sizeof(str));
+
+        /* Receive message from client */
+        received = recv(
+            client_socket,
+            str,
+            sizeof(str) - 1,
+            0
+        );
+
+        if (received <= 0)
+        {
+            printf("Client disconnected.\n");
+            break;
+        }
+
+        str[received] = '\0';
+
+        printf("\nClient: %s", str);
+
+        /* Check for exit */
+        if (strncmp(str, "exit", 4) == 0)
+        {
+            printf("Client requested termination.\n");
+            break;
+        }
+
+        /* Get reply from server user */
+        memset(str, 0, sizeof(str));
+
+        printf("Enter the reply: ");
+        fgets(str, sizeof(str), stdin);
+
+        /* Send reply to client */
+        send(
+            client_socket,
+            str,
+            strlen(str),
+            0
+        );
+    }
+
+    close(client_socket);
+    close(server_socket);
+
+    printf("\nServer terminated.\n");
+
+    return 0;
+}
+pandiarajan@Pandiarajan:~/cn/ex6$ cat client.c
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <string.h>
+
+#define PORT 5000
+
+int main()
+{
+    int client_socket;
+
+    struct sockaddr_in server_address;
+
+    char str[256];
+
+    /* Create socket */
+    client_socket = socket(
+        AF_INET,
+        SOCK_STREAM,
+        0
+    );
+
+    if (client_socket < 0)
+    {
+        printf("Socket creation failed!\n");
+        return 1;
+    }
+
+    printf("Socket created successfully.\n");
+
+    /* Configure server address */
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(PORT);
+    server_address.sin_addr.s_addr =
+        inet_addr("127.0.0.1");
+
+    /* Connect to server */
+    if (connect(
+            client_socket,
+            (struct sockaddr *)&server_address,
+            sizeof(server_address)) < 0)
+    {
+        printf("Connection to server failed!\n");
+
+        close(client_socket);
+
+        return 1;
+    }
+
+    printf("Connected to server successfully!\n");
+
+    /* Communication loop */
+    while (1)
+    {
+        int received;
+
+        memset(str, 0, sizeof(str));
+
+        /* Get message from client user */
+        printf("\nEnter the message: ");
+
+        fgets(str, sizeof(str), stdin);
+
+        /* Send message to server */
+        send(
+            client_socket,
+            str,
+            strlen(str),
+            0
+        );
+
+        /* Check for exit */
+        if (strncmp(str, "exit", 4) == 0)
+        {
+            printf("Closing connection...\n");
+            break;
+        }
+
+        /* Receive server response */
+        memset(str, 0, sizeof(str));
+
+        received = recv(
+            client_socket,
+            str,
+            sizeof(str) - 1,
+            0
+        );
+
+        if (received <= 0)
+        {
+            printf("Server disconnected.\n");
+            break;
+        }
+
+        str[received] = '\0';
+
+        printf("Server: %s", str);
+    }
+
+    close(client_socket);
+
+    printf("Client terminated.\n");
+
+    return 0;
+}
+pandiarajan@Pandiarajan:~/cn/ex6$ cat out.txt
+pandiarajan@Pandiarajan:~/cn/ex6$ ./server
+Socket created successfully.
+Binding successful.
+Server is listening on port 5000...
+Client connected successfully!
+
+Client: hi
+Enter the reply: hello
+
+Client: how are you
+Enter the reply: fine
+
+Client: fine
+Enter the reply: thank you
+
+Client: exit
+Client requested termination.
+
+Server terminated.
+
+CLIENT
+Socket created successfully.
+Connected to server successfully!
+
+Enter the message: hi
+Server: hello
+
+Enter the message: how are you
+fine
+Server: fine
+
+Enter the message: Server: thank you
+
+Enter the message: exit
+Closing connection...
+Client terminated.
