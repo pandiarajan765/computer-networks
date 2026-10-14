@@ -1,0 +1,337 @@
+pandiarajan@Pandiarajan:~/cn/ex8$ cat ex8.txt
+pandiarajan@Pandiarajan:~/cn/ex8$ cat server.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/select.h>
+#include <signal.h>
+#include <errno.h>
+
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+int main(void)
+{
+    int server_fd, client_socket;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_len;
+    char buffer[BUFFER_SIZE];
+
+    // Create server socket
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("Socket creation failed");
+        return EXIT_FAILURE;
+    }
+
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,
+               &opt, sizeof(opt));
+
+    // Configure server address
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind
+    if (bind(server_fd, (struct sockaddr *)&server_addr,
+             sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        close(server_fd);
+        return EXIT_FAILURE;
+    }
+
+    // Listen
+    if (listen(server_fd, 5) < 0) {
+        perror("Listen failed");
+        close(server_fd);
+        return EXIT_FAILURE;
+    }
+
+    // Avoid termination if a disconnected client causes a broken pipe
+    signal(SIGPIPE, SIG_IGN);
+
+    printf("Sequential Full Duplex Server on port %d...\n", PORT);
+
+    // Accept clients sequentially
+    while (1) {
+        printf("\nWaiting for a client...\n");
+        fflush(stdout);
+
+        addr_len = sizeof(client_addr);
+        client_socket = accept(server_fd,
+                    (struct sockaddr *)&client_addr, &addr_len);
+
+        if (client_socket < 0) {
+            perror("Accept failed");
+            continue;
+        }
+
+        printf("Connected to client: %s:%d\n",
+               inet_ntoa(client_addr.sin_addr),
+               ntohs(client_addr.sin_port));
+        printf("Conversation started. Type 'exit' to finish.\n");
+        fflush(stdout);
+
+        // Communicate with this client until it disconnects
+        int connected = 1;
+
+        while (connected) {
+            fd_set readfds;
+
+            FD_ZERO(&readfds);
+            FD_SET(client_socket, &readfds);
+            FD_SET(STDIN_FILENO, &readfds);
+
+            int maxfd = client_socket > STDIN_FILENO
+                        ? client_socket : STDIN_FILENO;
+
+            int activity = select(maxfd + 1, &readfds,
+                                  NULL, NULL, NULL);
+
+            if (activity < 0) {
+                if (errno == EINTR)
+                    continue;
+
+                perror("select failed");
+                break;
+            }
+
+            // Receive client message
+            if (FD_ISSET(client_socket, &readfds)) {
+                memset(buffer, 0, sizeof(buffer));
+
+                ssize_t n = recv(client_socket, buffer,
+                                 sizeof(buffer) - 1, 0);
+
+                if (n <= 0) {
+                    printf("\nClient disconnected.\n");
+                    connected = 0;
+                    break;
+                }
+
+                buffer[n] = '\0';
+                printf("\nClient: %s", buffer);
+
+                if (strncmp(buffer, "exit", 4) == 0) {
+                    printf("Client requested to exit.\n");
+                    connected = 0;
+                    break;
+                }
+
+                printf("Server: ");
+                fflush(stdout);
+            }
+
+            // Send server message
+            if (connected && FD_ISSET(STDIN_FILENO, &readfds)) {
+                if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+                    connected = 0;
+                    break;
+                }
+
+                if (strncmp(buffer, "exit", 4) == 0) {
+                    printf("Ending this conversation...\n");
+                    break;
+                }
+
+                if (send(client_socket, buffer,
+                         strlen(buffer), 0) < 0) {
+                    perror("Send failed");
+                    connected = 0;
+                    break;
+                }
+            }
+        }
+
+        // Close only the current client's connection
+        shutdown(client_socket, SHUT_RDWR);
+        close(client_socket);
+
+        printf("Conversation ended. Client disconnected.\n");
+        printf("The server is ready for the next client.\n");
+        fflush(stdout);
+    }
+
+    close(server_fd);
+    return EXIT_SUCCESS;
+}
+pandiarajan@Pandiarajan:~/cn/ex8$ cat client.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <signal.h>
+#include <sys/wait.h>
+
+#define SERVER_IP "127.0.0.1"
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+int main() {
+    int sock_fd;
+    struct sockaddr_in server_addr;
+    pid_t pid;
+
+    // 1. Create the TCP socket
+    sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock_fd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // 2. Configure server address structure
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+
+    // Convert IP address from text to binary format
+    if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
+        perror("Invalid address or Address not supported");
+        close(sock_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // 3. Connect to the server
+    if (connect(sock_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Connection failed");
+        close(sock_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Connected to the server successfully!\n");
+    printf("Type your messages (Type 'exit' to quit):\n");
+
+    // 4. Fork process for full-duplex communication
+    pid = fork();
+    if (pid < 0) {
+        perror("Fork failed");
+        close(sock_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid == 0) {
+        // Child process handles receiving data from the server
+        char recv_buffer[BUFFER_SIZE];
+        while (1) {
+            memset(recv_buffer, 0, BUFFER_SIZE);
+            int bytes_received = recv(sock_fd, recv_buffer, BUFFER_SIZE - 1, 0);
+            if (bytes_received <= 0) {
+                printf("\nServer disconnected.\n");
+                kill(getppid(), SIGKILL); // Kill parent process
+                break;
+            }
+            printf("\nServer > %sClient > ", recv_buffer);
+            fflush(stdout);
+        }
+    } else {
+        // Parent process handles sending data to the server
+        char send_buffer[BUFFER_SIZE];
+        while (1) {
+            printf("Client > ");
+            fflush(stdout);
+            if (fgets(send_buffer, BUFFER_SIZE, stdin) == NULL) {
+                break;
+            }
+
+            if (strncmp(send_buffer, "exit", 4) == 0) {
+                kill(pid, SIGKILL); // Kill child process
+                break;
+            }
+
+            send(sock_fd, send_buffer, strlen(send_buffer), 0);
+        }
+    }
+
+    // 5. Close the socket
+    close(sock_fd);
+    printf("Connection closed.\n");
+    return 0;
+}
+pandiarajan@Pandiarajan:~/cn/ex8$ ./server
+Sequential Full Duplex Server on port 8080...
+
+Waiting for a client...
+Connected to client: 127.0.0.1:37976
+Conversation started. Type 'exit' to finish.
+
+Client: hi
+Server: hello
+
+Client: how are you
+Server: fine
+
+Client: what are you doing
+Server: chatting
+
+Client: thenk you
+Server: okay
+
+Client disconnected.
+Conversation ended. Client disconnected.
+The server is ready for the next client.
+
+Waiting for a client...
+Connected to client: 127.0.0.1:37986
+Conversation started. Type 'exit' to finish.
+
+Client: hi
+Server: hi
+
+Client: ggoodmorning
+Server: good morning
+
+Client: what day is today
+Server: wednesday
+
+Client: thank you
+Server: okay
+
+Client disconnected.
+Conversation ended. Client disconnected.
+The server is ready for the next client.
+
+Waiting for a client...
+exit
+pandiarajan@Pandiarajan:~/cn/ex8$ ./client
+Connected to the server successfully!
+Type your messages (Type 'exit' to quit):
+Client > hi
+Client >
+Server > hello
+Client > how are you
+Client >
+Server > fine
+Client > what are you doing
+Client >
+Server > chatting
+Client > thenk you
+Client >
+Server > okay
+Client > exit
+Connection closed.
+pandiarajan@Pandiarajan:~/cn/ex8$ ./client
+Connected to the server successfully!
+Type your messages (Type 'exit' to quit):
+Client > hi
+Client > g
+Server > hi
+Client > goodmorning
+Client >
+Server > good morning
+Client > what day is today
+Client >
+Server > wednesday
+Client > thank you
+Client >
+Server > okay
+Client > exit
+Connection closed.
